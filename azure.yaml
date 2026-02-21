@@ -1,0 +1,15 @@
+name: dab-apim-demo
+metadata:
+  template: dab-apim-demo@0.0.1
+services:
+  dab:
+    project: ./src
+    host: containerapp
+    docker:
+      registry: ${AZURE_CONTAINER_REGISTRY_ENDPOINT}
+      image: dab
+      tag: ${IMAGE_TAG}
+infra:
+  provider: bicep
+  path: infra
+  module: main

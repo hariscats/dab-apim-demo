@@ -1,0 +1,56 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/download/v1.2.11/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "mysql",
+    "connection-string": "@env('DATABASE_CONNECTION_STRING')"
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api"
+    },
+    "graphql": {
+      "enabled": false
+    },
+    "host": {
+      "mode": "production",
+      "cors": {
+        "origins": [],
+        "allow-credentials": false
+      },
+      "authentication": {
+        "provider": "StaticWebApps"
+      }
+    }
+  },
+  "entities": {
+    "products": {
+      "source": {
+        "object": "products",
+        "type": "table"
+      },
+      "rest": {
+        "path": "/products",
+        "methods": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE"
+        ]
+      },
+      "graphql": {
+        "enabled": false
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": [
+            {
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

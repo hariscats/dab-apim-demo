@@ -1,0 +1,121 @@
+name: Deploy dab-apim-demo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_ENV_NAME: dab-apim-demo
+  AZURE_LOCATION: eastus
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Provision and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── OIDC auth: Azure CLI ───────────────────────────────────────────────
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ── Install azd ────────────────────────────────────────────────────────
+      - name: Install Azure Developer CLI
+        run: curl -fsSL https://aka.ms/install-azd.sh | bash
+
+      # ── azd OIDC auth ──────────────────────────────────────────────────────
+      - name: Authenticate azd via OIDC
+        run: |
+          azd auth login \
+            --client-id "${{ secrets.AZURE_CLIENT_ID }}" \
+            --tenant-id "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-credential-provider github
+
+      # ── azd provision ──────────────────────────────────────────────────────
+      - name: Provision Azure infrastructure
+        run: azd provision --no-prompt
+        env:
+          AZURE_ENV_NAME: ${{ env.AZURE_ENV_NAME }}
+          AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          MYSQL_ADMIN_USER: ${{ secrets.MYSQL_ADMIN_USER }}
+          MYSQL_ADMIN_PASSWORD: ${{ secrets.MYSQL_ADMIN_PASSWORD }}
+
+      # ── Extract azd outputs ────────────────────────────────────────────────
+      - name: Extract deployment outputs
+        id: outputs
+        run: |
+          ACR_LOGIN_SERVER=$(azd env get-values | grep AZURE_CONTAINER_REGISTRY_ENDPOINT | cut -d= -f2 | tr -d '"')
+          MYSQL_SERVER_NAME=$(azd env get-values | grep MYSQL_SERVER_NAME | cut -d= -f2 | tr -d '"')
+          MYSQL_DB_NAME=$(azd env get-values | grep MYSQL_DB_NAME | cut -d= -f2 | tr -d '"')
+          echo "acr_login_server=${ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "mysql_server_name=${MYSQL_SERVER_NAME}" >> "$GITHUB_OUTPUT"
+          echo "mysql_db_name=${MYSQL_DB_NAME}" >> "$GITHUB_OUTPUT"
+
+      # ── ACR login & Docker build/push ──────────────────────────────────────
+      - name: Log in to Azure Container Registry
+        run: az acr login --name ${{ steps.outputs.outputs.acr_login_server }}
+
+      - name: Build and push DAB image
+        run: |
+          IMAGE="${{ steps.outputs.outputs.acr_login_server }}/dab:${{ env.IMAGE_TAG }}"
+          docker build -t "${IMAGE}" ./src
+          docker push "${IMAGE}"
+
+      # ── Dynamic firewall rule: add runner IP ───────────────────────────────
+      - name: Add runner IP to MySQL firewall
+        id: firewall
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "runner_ip=${RUNNER_IP}" >> "$GITHUB_OUTPUT"
+          az mysql flexible-server firewall-rule create \
+            --name "${{ steps.outputs.outputs.mysql_server_name }}" \
+            --resource-group "rg-${{ env.AZURE_ENV_NAME }}" \
+            --rule-name "GitHubRunner-${{ github.run_id }}" \
+            --start-ip-address "${RUNNER_IP}" \
+            --end-ip-address "${RUNNER_IP}"
+
+      # ── Database schema initialization ─────────────────────────────────────
+      - name: Initialize database schema
+        run: bash scripts/init-db.sh
+        env:
+          MYSQL_SERVER_NAME: ${{ steps.outputs.outputs.mysql_server_name }}
+          MYSQL_DB_NAME: ${{ steps.outputs.outputs.mysql_db_name }}
+          MYSQL_ADMIN_USER: ${{ secrets.MYSQL_ADMIN_USER }}
+          MYSQL_ADMIN_PASSWORD: ${{ secrets.MYSQL_ADMIN_PASSWORD }}
+
+      # ── azd deploy ─────────────────────────────────────────────────────────
+      - name: Deploy DAB service
+        run: azd deploy --service dab --no-prompt
+        env:
+          AZURE_ENV_NAME: ${{ env.AZURE_ENV_NAME }}
+          AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          MYSQL_ADMIN_USER: ${{ secrets.MYSQL_ADMIN_USER }}
+          MYSQL_ADMIN_PASSWORD: ${{ secrets.MYSQL_ADMIN_PASSWORD }}
+
+      # ── Cleanup: remove runner IP firewall rule (always runs) ───────────────
+      - name: Remove runner IP from MySQL firewall
+        if: always()
+        run: |
+          az mysql flexible-server firewall-rule delete \
+            --name "${{ steps.outputs.outputs.mysql_server_name }}" \
+            --resource-group "rg-${{ env.AZURE_ENV_NAME }}" \
+            --rule-name "GitHubRunner-${{ github.run_id }}" \
+            --yes || true
