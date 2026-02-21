@@ -12,7 +12,7 @@ permissions:
 
 env:
   AZURE_ENV_NAME: dab-apim-demo
-  AZURE_LOCATION: eastus
+  AZURE_LOCATION: westus
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
