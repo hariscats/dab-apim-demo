@@ -60,6 +60,10 @@ jobs:
           AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
           AZURE_RESOURCE_GROUP: rg-${{ env.AZURE_ENV_NAME }}
 
+      # ── Pre-create resource group (azd --no-prompt requires it to exist) ──
+      - name: Create resource group
+        run: az group create --name "rg-${{ env.AZURE_ENV_NAME }}" --location "${{ env.AZURE_LOCATION }}"
+
       # ── azd provision ──────────────────────────────────────────────────────
       - name: Provision Azure infrastructure
         run: azd provision --no-prompt
