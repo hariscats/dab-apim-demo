@@ -45,14 +45,20 @@ jobs:
             --tenant-id "${{ secrets.AZURE_TENANT_ID }}" \
             --federated-credential-provider github
 
-      # ── Initialize azd environment ─────────────────────────────────────────
+      # ── Write azd environment files directly (bypasses interactive prompts) ──
       - name: Configure azd environment
         run: |
-          azd env new ${{ env.AZURE_ENV_NAME }} --no-prompt 2>/dev/null || true
-          azd env select ${{ env.AZURE_ENV_NAME }}
-          azd env set AZURE_SUBSCRIPTION_ID ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          azd env set AZURE_LOCATION ${{ env.AZURE_LOCATION }}
-          azd env set AZURE_RESOURCE_GROUP rg-${{ env.AZURE_ENV_NAME }}
+          mkdir -p .azure/${{ env.AZURE_ENV_NAME }}
+          printf '{"defaultEnvironment":"%s"}\n' "${{ env.AZURE_ENV_NAME }}" > .azure/config.json
+          {
+            echo "AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}"
+            echo "AZURE_LOCATION=${AZURE_LOCATION}"
+            echo "AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}"
+          } > .azure/${{ env.AZURE_ENV_NAME }}/.env
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
+          AZURE_RESOURCE_GROUP: rg-${{ env.AZURE_ENV_NAME }}
 
       # ── azd provision ──────────────────────────────────────────────────────
       - name: Provision Azure infrastructure
