@@ -19,7 +19,6 @@ jobs:
   deploy:
     name: Provision and Deploy
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
       # ── Checkout ──────────────────────────────────────────────────────────
