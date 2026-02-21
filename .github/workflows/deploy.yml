@@ -45,14 +45,19 @@ jobs:
             --tenant-id "${{ secrets.AZURE_TENANT_ID }}" \
             --federated-credential-provider github
 
+      # ── Initialize azd environment ─────────────────────────────────────────
+      - name: Configure azd environment
+        run: |
+          azd env new ${{ env.AZURE_ENV_NAME }} --no-prompt 2>/dev/null || true
+          azd env select ${{ env.AZURE_ENV_NAME }}
+          azd env set AZURE_SUBSCRIPTION_ID ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azd env set AZURE_LOCATION ${{ env.AZURE_LOCATION }}
+          azd env set AZURE_RESOURCE_GROUP rg-${{ env.AZURE_ENV_NAME }}
+
       # ── azd provision ──────────────────────────────────────────────────────
       - name: Provision Azure infrastructure
         run: azd provision --no-prompt
         env:
-          AZURE_ENV_NAME: ${{ env.AZURE_ENV_NAME }}
-          AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: rg-${{ env.AZURE_ENV_NAME }}
           MYSQL_ADMIN_USER: ${{ secrets.MYSQL_ADMIN_USER }}
           MYSQL_ADMIN_PASSWORD: ${{ secrets.MYSQL_ADMIN_PASSWORD }}
 
