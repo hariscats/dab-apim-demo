@@ -52,6 +52,7 @@ jobs:
           AZURE_ENV_NAME: ${{ env.AZURE_ENV_NAME }}
           AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: rg-${{ env.AZURE_ENV_NAME }}
           MYSQL_ADMIN_USER: ${{ secrets.MYSQL_ADMIN_USER }}
           MYSQL_ADMIN_PASSWORD: ${{ secrets.MYSQL_ADMIN_PASSWORD }}
 
