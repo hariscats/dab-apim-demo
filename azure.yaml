@@ -5,10 +5,7 @@ services:
   dab:
     project: ./src
     host: containerapp
-    docker:
-      registry: ${AZURE_CONTAINER_REGISTRY_ENDPOINT}
-      image: dab
-      tag: ${IMAGE_TAG}
+    language: docker
 infra:
   provider: bicep
   path: infra
